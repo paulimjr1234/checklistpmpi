@@ -1,5 +1,7 @@
 package com.example.ui.screens.home
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,8 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +26,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
@@ -33,11 +41,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,20 +68,45 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.service.cloud.GoogleDriveProvider
 import com.example.ui.AppScreen
 import com.example.ui.MainViewModel
 import com.example.ui.theme.PmpiBlue
 import com.example.ui.theme.PmpiBlueContainer
 import com.example.ui.theme.PmpiBlueDark
+import com.example.ui.theme.PmpiGreen
+import com.example.ui.theme.PmpiGreenContainer
 import com.example.ui.theme.PmpiOutline
 import com.example.ui.theme.PmpiRed
 import com.example.ui.theme.PmpiSurfaceVariant
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.Scope
 
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
     onNavigate: (AppScreen) -> Unit
 ) {
+    val context = LocalContext.current
+    val isDriveConnected by viewModel.isDriveConnected.collectAsState()
+    val driveAccountEmail by viewModel.driveAccountEmail.collectAsState()
+
+    val googleSignInClient = remember(context) {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestScopes(Scope(GoogleDriveProvider.DRIVE_SCOPE))
+            .build()
+        GoogleSignIn.getClient(context, gso)
+    }
+
+    val driveSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        viewModel.handleGoogleSignInResult(task)
+    }
+
     var showPasswordDialogForScreen by remember { mutableStateOf<AppScreen?>(null) }
     var passwordInput by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf(false) }
@@ -80,6 +116,7 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
+            .imePadding()
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -88,7 +125,8 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(PmpiBlue)
-                .padding(top = 40.dp, bottom = 28.dp, start = 20.dp, end = 20.dp),
+                .statusBarsPadding()
+                .padding(top = 16.dp, bottom = 28.dp, start = 20.dp, end = 20.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -194,6 +232,170 @@ fun HomeScreen(
                     showPasswordDialogForScreen = AppScreen.SAVED_CHECKLISTS
                 }
             )
+
+            // 4. GOOGLE DRIVE (Armazenamento em Nuvem)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("card_google_drive"),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDriveConnected) Color(0xFFF0FDF4) else Color(0xFFF8FAFC)
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isDriveConnected) Color(0xFF86EFAC) else Color(0xFFE2E8F0)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isDriveConnected) PmpiGreenContainer else PmpiBlueContainer
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isDriveConnected) Icons.Default.CloudDone else Icons.Default.CloudSync,
+                                    contentDescription = "Google Drive",
+                                    tint = if (isDriveConnected) PmpiGreen else PmpiBlueDark,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "GOOGLE DRIVE",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Color(0xFF0F172A)
+                                )
+                                Text(
+                                    text = if (isDriveConnected && !driveAccountEmail.isNullOrBlank()) {
+                                        driveAccountEmail!!
+                                    } else if (isDriveConnected) {
+                                        "Conta autorizada"
+                                    } else {
+                                        "Sincronização em nuvem"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B)
+                                )
+                            }
+                        }
+
+                        // Badge de Status (🟢 Conectado / ⚪ Não conectado)
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isDriveConnected) Color(0xFFDCFCE7) else Color(0xFFF1F5F9),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isDriveConnected) Color(0xFF86EFAC) else Color(0xFFCBD5E1)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isDriveConnected) "🟢 Conectado" else "⚪ Não conectado",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDriveConnected) Color(0xFF166534) else Color(0xFF475569)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = if (isDriveConnected) {
+                            "Estrutura organizada automaticamente no Google Drive: CHECKLIST VTR → [ANO] → [MÊS] → [DIA]."
+                        } else {
+                            "Conecte sua conta Google para enviar os PDFs dos relatórios diretamente para as pastas oficiais do Drive."
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFF475569),
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (isDriveConnected) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.disconnectGoogleDrive(googleSignInClient)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("btn_disconnect_google_drive"),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = PmpiRed
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "DESCONECTAR GOOGLE DRIVE",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                driveSignInLauncher.launch(googleSignInClient.signInIntent)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("btn_connect_google_drive"),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PmpiBlue
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudSync,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "CONECTAR GOOGLE DRIVE",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -207,6 +409,7 @@ fun HomeScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.navigationBarsPadding())
     }
 
     // Modal de Senha Administrativa

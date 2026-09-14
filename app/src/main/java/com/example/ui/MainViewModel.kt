@@ -11,9 +11,17 @@ import com.example.data.model.OfficerEntity
 import com.example.data.model.PoliceUnitEntity
 import com.example.data.model.VehicleEntity
 import com.example.data.repository.ChecklistRepository
+import com.example.service.cloud.CloudStorageProvider
 import com.example.service.cloud.CloudStorageService
+import com.example.service.cloud.GoogleDriveProvider
 import com.example.service.cloud.LocalOnlyCloudStorageService
 import com.example.util.pdf.PdfGenerator
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
+import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -79,6 +87,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = ChecklistRepository(db)
     val adminPreferences = AdminPreferences(application)
     val cloudStorageService: CloudStorageService = LocalOnlyCloudStorageService()
+    val googleDriveProvider: GoogleDriveProvider = GoogleDriveProvider(application)
+
+    private val _isDriveConnected = MutableStateFlow(googleDriveProvider.isConnected())
+    val isDriveConnected: StateFlow<Boolean> = _isDriveConnected.asStateFlow()
+
+    private val _driveAccountEmail = MutableStateFlow(googleDriveProvider.getConnectedAccountEmail())
+    val driveAccountEmail: StateFlow<String?> = _driveAccountEmail.asStateFlow()
+
+    private val _isUploadingToDrive = MutableStateFlow(false)
+    val isUploadingToDrive: StateFlow<Boolean> = _isUploadingToDrive.asStateFlow()
 
     private val _currentScreen = MutableStateFlow(AppScreen.HOME)
     val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
@@ -122,6 +140,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             AppDatabase.populateDatabase(db)
         }
+        refreshDriveConnectionStatus()
     }
 
     fun navigateTo(screen: AppScreen) {
@@ -358,6 +377,87 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.updateChecklist(record.copy(pdfFilePath = file.absolutePath))
         }
         return file
+    }
+
+    // --- GOOGLE DRIVE INTEGRATION ACTIONS ---
+
+    fun refreshDriveConnectionStatus() {
+        val connected = googleDriveProvider.isConnected()
+        _isDriveConnected.value = connected
+        _driveAccountEmail.value = if (connected) googleDriveProvider.getConnectedAccountEmail() else null
+    }
+
+    fun handleGoogleSignInResult(task: Task<GoogleSignInAccount>?) {
+        if (task == null) {
+            refreshDriveConnectionStatus()
+            return
+        }
+        try {
+            val account = task.getResult(ApiException::class.java)
+            if (account != null && GoogleSignIn.hasPermissions(account, Scope(GoogleDriveProvider.DRIVE_SCOPE))) {
+                _isDriveConnected.value = true
+                _driveAccountEmail.value = account.email
+                showMessage("Google Drive conectado com sucesso: ${account.email}")
+            } else {
+                _isDriveConnected.value = false
+                _driveAccountEmail.value = null
+                showMessage("Permissão para o Google Drive não foi concedida.")
+            }
+        } catch (e: ApiException) {
+            _isDriveConnected.value = false
+            _driveAccountEmail.value = null
+            showMessage("Erro ao conectar Google Drive (${e.statusCode}): ${e.localizedMessage}")
+        }
+    }
+
+    fun disconnectGoogleDrive(client: GoogleSignInClient, onComplete: () -> Unit = {}) {
+        client.signOut().addOnCompleteListener {
+            _isDriveConnected.value = false
+            _driveAccountEmail.value = null
+            showMessage("Google Drive desconectado.")
+            onComplete()
+        }
+    }
+
+    fun uploadRecordToGoogleDrive(
+        record: ChecklistRecordEntity,
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
+    ) {
+        if (!_isDriveConnected.value) {
+            val msg = "Conecte uma conta Google Drive para enviar o relatório para a nuvem."
+            showMessage(msg)
+            onResult(false, msg)
+            return
+        }
+        if (_isUploadingToDrive.value) return
+
+        _isUploadingToDrive.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Utilizar exatamente o mesmo PDF já gerado localmente
+                val pdfFile = ensurePdfFile(record)
+                val uploadResult = googleDriveProvider.uploadReportPdf(record, pdfFile)
+                withContext(Dispatchers.Main) {
+                    _isUploadingToDrive.value = false
+                    if (uploadResult.isSuccess) {
+                        val successMsg = "Relatório enviado para o Google Drive com sucesso."
+                        showMessage(successMsg)
+                        onResult(true, successMsg)
+                    } else {
+                        val errorMsg = "Não foi possível enviar o relatório para o Google Drive. O relatório continua salvo no dispositivo."
+                        showMessage(errorMsg)
+                        onResult(false, errorMsg)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isUploadingToDrive.value = false
+                    val errorMsg = "Não foi possível enviar o relatório para o Google Drive. O relatório continua salvo no dispositivo."
+                    showMessage(errorMsg)
+                    onResult(false, errorMsg)
+                }
+            }
+        }
     }
 
     // --- ADMIN ACTIONS ---
