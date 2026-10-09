@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --pmpi-blue: #0A2240;
+    --pmpi-blue-dark: #041021;
+    --pmpi-blue-petroleo: #0F3A53;
+    --pmpi-gold: #C8961D;
+    --pmpi-gold-light: #F5EECE;
+  }
+}

@@ -1,22 +1,34 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+  <h1>Checklist PMPI</h1>
+  <p><strong>Aplicativo institucional de Checklist de Viaturas para a Polícia Militar do Estado do Piauí (PMPI)</strong></p>
 </div>
 
-# Run and deploy your AI Studio app
+Sistema web e móvel de inspeção técnica, controle operacional e emissão digital de relatórios de viaturas policiais da PMPI.
 
-This contains everything you need to run your app locally.
+## Principais Funcionalidades
 
-View your app in AI Studio: https://ai.studio/apps/b1cdf2fb-932f-4b98-9988-8e29027fca37
+- **Vistoria Técnica de Viaturas**: Inspeção de itens mecânicos e elétricos (óleo, radiador, pneus, giroflex, rádio, estepe, macaco, faróis e ar-condicionado) com justificativa obrigatória para anomalias.
+- **Registro Fotográfico Obrigatório**: Registro dos 4 ângulos obrigatórios da viatura (Frente, Lado do Motorista, Lado do Passageiro e Traseira).
+- **Emissão Executiva de PDF**: Geração de documento oficial com brasão da PMPI em alta definição, molduras institucionais, frisos dourados, marca-d'água de autenticidade e assinatura digital do policial responsável.
+- **Estrutura Administrativa de Unidades**: Seleção hierárquica por Grande Comando (CPM, CPLMN, CPSA, CPCE, CPE, CPCOM, COPAer, CPTRAN, CPA) e Batalhões / Companhias com proteção por senha administrativa.
+- **Histórico e Compartilhamento**: Consulta de checklists finalizados, busca dinâmica, visualização detalhada e compartilhamento instantâneo.
+- **Integração Google Drive**: Envio direto dos PDFs de vistorias para a nuvem seguindo a árvore de pastas oficial (`CHECKLIST VTR / [ANO] / [MÊS] / [DIA]`).
 
-## Run Locally
+## Executar Localmente
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+### Pré-requisitos
+- [Node.js](https://nodejs.org/) (versão 20+)
+- npm
 
+### Passos
+1. Clone o repositório ou acesse a pasta do projeto.
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
+4. Acesse `http://localhost:3000` no seu navegador.
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
-7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
